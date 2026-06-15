@@ -363,18 +363,18 @@ static void windowLoad(Window *window) {
 
   weather = text_layer_create(GRect(0, 15, bw - 3, 50));
   text_layer_set_font(weather, medFont);
-  text_layer_set_text(weather, "fetching from mi6..");
+  text_layer_set_text(weather, "FETCHING...");
   text_layer_set_background_color(weather, GColorClear);
   text_layer_set_text_color(weather, textColor);
   text_layer_set_text_alignment(weather, GTextAlignmentRight);
 
-  watchLazer = text_layer_create(GRect(0, lazer_y, bw / 2, label_h));
+  watchLazer = text_layer_create(GRect(0, lazer_y, bw, label_h));
   text_layer_set_font(watchLazer, smallFont);
   text_layer_set_background_color(watchLazer, GColorClear);
   text_layer_set_text_color(watchLazer, textColor);
   text_layer_set_text_alignment(watchLazer, GTextAlignmentLeft);
 
-  battery = text_layer_create(GRect(bw / 2, lazer_y, bw / 2, label_h));
+  battery = text_layer_create(GRect(0, lazer_y, bw, label_h));
   text_layer_set_font(battery, smallFont);
   text_layer_set_text_alignment(battery, GTextAlignmentRight);
   text_layer_set_background_color(battery, GColorClear);
