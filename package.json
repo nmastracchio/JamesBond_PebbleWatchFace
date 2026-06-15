@@ -36,21 +36,24 @@
                 {
                     "file": "fonts/CLOCK_29",
                     "name": "CLOCK_29",
+                    "targetPlatforms": ["aplite", "basalt"],
                     "type": "font"
                 },
                 {
                     "file": "fonts/SMALL_10",
                     "name": "SMALL_9",
+                    "targetPlatforms": ["aplite", "basalt"],
                     "type": "font"
                 },
                 {
                     "file": "fonts/MED_12",
                     "name": "MED_12",
+                    "targetPlatforms": ["aplite", "basalt"],
                     "type": "font"
                 }
             ]
         },
-        "sdkVersion": "3",
+        "sdkVersion": "4",
         "targetPlatforms": [
             "aplite",
             "basalt",
