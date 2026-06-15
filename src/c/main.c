@@ -6,9 +6,6 @@
 #define KEY_WEATHER 1
 #define KEY_ISCELS 2
 #define KEY_ISAUTHENTIC 3
-#define KEY_LAST_BATTERY_LEVEL 4
-#define KEY_LAST_BATTERY_LEVEL_DATE 5
-#define KEY_HEALTH 6
 
 static Window *window;
 
@@ -18,16 +15,14 @@ static GFont timeFont, smallFont, medFont;
 static Layer *health, *armour, *background, *batteryBar;
 
 static int batteryLevel;
+static int stepCount;
 
   Tuple *temp_tuple;
   Tuple *conditions_tuple;
   Tuple *cels_tuple;
   Tuple *authentic_tuple;
 
-
-// Store incoming information
 static char cels_buffer[8];
-static int authentic_buffer;
 static char conditions_buffer[32];
 static char weather_layer_buffer[32];
 
@@ -48,174 +43,157 @@ static void outbox_sent_callback(DictionaryIterator *iterator, void *context) {
 static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
   Tuple *isConfig = dict_find(iterator, 2);
 
-  // Read tuples for data
   if(isConfig) {
     cels_tuple = dict_find(iterator, KEY_ISCELS);
     authentic_tuple = dict_find(iterator, KEY_ISAUTHENTIC);
     persist_write_int(KEY_ISCELS, (int)cels_tuple->value->int32);
     persist_write_int(KEY_ISAUTHENTIC, (int)authentic_tuple->value->int32);
-    printf("saved celsius %d", (int)cels_tuple->value->int32);
-  }  else{
+  } else {
     temp_tuple = dict_find(iterator, KEY_TEMPERATURE);
     conditions_tuple = dict_find(iterator, KEY_WEATHER);
     snprintf(conditions_buffer, sizeof(conditions_buffer), "%s", conditions_tuple->value->cstring);
   }
 
-  // If all data is available, use it
   int isCels = (int)persist_read_int(KEY_ISCELS);
-  printf("read celsius %d", isCels);
-  int isAuthentic = (int)persist_read_int(KEY_ISAUTHENTIC);
   if(isCels) {
     snprintf(cels_buffer, sizeof(cels_buffer), "%d", isCels);
   }
-
-    authentic_buffer = (int)authentic_tuple->value->int32;
-    text_layer_set_text(watchLazer, isAuthentic ? "WATCH LASER" : "BATTERY");
-    static char LazerLevel[5];
-    if(isAuthentic){
-       snprintf(LazerLevel, sizeof(LazerLevel), "%d0", batteryLevel);
-    }else{
-      snprintf(LazerLevel, sizeof(LazerLevel), "%d%%", batteryLevel);
-    }
-    text_layer_set_text(battery, LazerLevel);
-
 
   if(temp_tuple && conditions_tuple){
     int temp = isCels ? (int)temp_tuple->value->int32 : (int)temp_tuple->value->int32 * 1.8 + 32;
     snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s\n%d%s", conditions_buffer, temp, isCels ? "C" : "F");
     text_layer_set_text(weather, weather_layer_buffer);
   }
-
 }
 
 
 static void drawBatteryBar(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
-  int width = (bounds.size.w - 18)/5;
+  int width = (bounds.size.w - 18) / 5;
 
   for (int16_t i = 0; i < 5; i++) {
     graphics_context_set_fill_color(ctx, batteryLevel > i * 20 ? textColor : PBL_IF_COLOR_ELSE(GColorIslamicGreen, GColorBlack));
-    graphics_fill_rect(ctx, GRect(3 + i * (width + 3), 0, width/2, bounds.size.h), 0, GCornerNone);
-    graphics_context_set_fill_color(ctx, batteryLevel > ((i * 20)+10)  ? textColor : PBL_IF_COLOR_ELSE(GColorIslamicGreen, GColorBlack));
-    graphics_fill_rect(ctx, GRect(3 + i * (width + 3)+ width/2, 0, width/2, bounds.size.h), 0, GCornerNone);
+    graphics_fill_rect(ctx, GRect(3 + i * (width + 3), 0, width / 2, bounds.size.h), 0, GCornerNone);
+    graphics_context_set_fill_color(ctx, batteryLevel > ((i * 20) + 10) ? textColor : PBL_IF_COLOR_ELSE(GColorIslamicGreen, GColorBlack));
+    graphics_fill_rect(ctx, GRect(3 + i * (width + 3) + width / 2, 0, width / 2, bounds.size.h), 0, GCornerNone);
   }
 }
 
-// Segment y-positions and heights are scaled proportionally from a 167px reference height.
-// The original watchface was designed for a 168px screen (health layer height = 167).
-// SY() scales a y-offset; SH() scales a height (adds 1px to avoid rounding to 0 on small values).
-#define SY(orig, h) ((int16_t)((orig) * (h) / 167))
-#define SH(orig, h) ((int16_t)((orig) * (h) / 167 + 1))
+// Compute segment layout from layer height h.
+// Top half (0..h/2): 3 large blocks with 2px gaps.
+// Bottom half (h/2..h): 5 small blocks with 2px gaps.
+static void seg_layout(int16_t h,
+                       int16_t *large_h, int16_t *small_h,
+                       int16_t b[8]) {
+  *large_h = (h / 2 - 4) / 3;
+  *small_h = (h / 2 - 8) / 5;
+  b[0] = 0;
+  b[1] = *large_h + 2;
+  b[2] = 2 * (*large_h + 2);
+  b[3] = h / 2;
+  b[4] = h / 2 + (*small_h + 2);
+  b[5] = h / 2 + 2 * (*small_h + 2);
+  b[6] = h / 2 + 3 * (*small_h + 2);
+  b[7] = h / 2 + 4 * (*small_h + 2);
+}
 
 static void drawHealth(Layer *layer, GContext *ctx) {
-  int curHealth = persist_read_int(KEY_HEALTH);
-  printf("health ================================== %d", curHealth);
+  int cur = batteryLevel;
   GRect bounds = layer_get_bounds(layer);
   int16_t w = bounds.size.w;
   int16_t h = bounds.size.h;
 
-  if(curHealth > 98){
-    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorBulgarianRose,GColorWhite));
-    graphics_fill_rect(ctx, GRect(1, SY(7,h), w, SH(21,h)), 0, GCornerNone);
-  }else{
-    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorBulgarianRose,GColorWhite));
-    graphics_draw_rect(ctx, GRect(1, SY(7,h), w-1, SH(21,h)));
-    if(curHealth > 91.5){
-      graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorBulgarianRose,GColorWhite));
-      graphics_fill_rect(ctx, GRect(1, SY(17,h), w-1, SH(10,h)), 0, GCornerNone);
+  int16_t lh, sh2, b[8];
+  seg_layout(h, &lh, &sh2, b);
+  int16_t half_h = lh - lh / 2;
+
+  // Block 0 — top large (Bulgarian Rose)
+  if(cur > 98){
+    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorBulgarianRose, GColorWhite));
+    graphics_fill_rect(ctx, GRect(1, b[0], w, lh), 0, GCornerNone);
+  } else {
+    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorBulgarianRose, GColorWhite));
+    graphics_draw_rect(ctx, GRect(1, b[0], w-1, lh));
+    if(cur > 91.5){
+      graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorBulgarianRose, GColorWhite));
+      graphics_fill_rect(ctx, GRect(1, b[0] + lh/2, w-1, half_h), 0, GCornerNone);
     }
   }
 
-  if(curHealth > 83.2){
-    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed,GColorWhite));
-    graphics_fill_rect(ctx, GRect(1, SY(35,h), w, SH(21,h)), 0, GCornerNone);
-  }else{
-    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed,GColorWhite));
-    graphics_draw_rect(ctx, GRect(1, SY(35,h), w-1, SH(21,h)));
-    if(curHealth > 74.9){
-      graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed,GColorWhite));
-      graphics_fill_rect(ctx, GRect(1, SY(45,h), w-1, SH(10,h)), 0, GCornerNone);
+  // Block 1 — Dark Candy Apple Red
+  if(cur > 83.2){
+    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed, GColorWhite));
+    graphics_fill_rect(ctx, GRect(1, b[1], w, lh), 0, GCornerNone);
+  } else {
+    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed, GColorWhite));
+    graphics_draw_rect(ctx, GRect(1, b[1], w-1, lh));
+    if(cur > 74.9){
+      graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkCandyAppleRed, GColorWhite));
+      graphics_fill_rect(ctx, GRect(1, b[1] + lh/2, w-1, half_h), 0, GCornerNone);
     }
   }
 
-  if(curHealth > 66.6){
-    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorRed,GColorWhite));
-    graphics_fill_rect(ctx, GRect(1, SY(63,h), w, SH(21,h)), 0, GCornerNone);
-  }else{
-    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorRed,GColorWhite));
-    graphics_draw_rect(ctx, GRect(1, SY(63,h), w-1, SH(21,h)));
-    if(curHealth > 58.3){
-      graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorRed,GColorWhite));
-      graphics_fill_rect(ctx, GRect(1, SY(73,h), w-1, SH(10,h)), 0, GCornerNone);
+  // Block 2 — Red
+  if(cur > 66.6){
+    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorRed, GColorWhite));
+    graphics_fill_rect(ctx, GRect(1, b[2], w, lh), 0, GCornerNone);
+  } else {
+    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorRed, GColorWhite));
+    graphics_draw_rect(ctx, GRect(1, b[2], w-1, lh));
+    if(cur > 58.3){
+      graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorRed, GColorWhite));
+      graphics_fill_rect(ctx, GRect(1, b[2] + lh/2, w-1, half_h), 0, GCornerNone);
     }
   }
 
-  if(curHealth >= 50){
-    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorOrange,GColorWhite));
-    graphics_fill_rect(ctx, GRect(1, SY(91,h), w, SH(8,h)), 0, GCornerNone);
-  }else{
-    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorOrange,GColorWhite));
-    graphics_draw_rect(ctx, GRect(1, SY(91,h), w-1, SH(8,h)));
+  // Blocks 3–7 — small segments (Orange → Pastel Yellow)
+  if(cur >= 50){
+    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorOrange, GColorWhite));
+    graphics_fill_rect(ctx, GRect(1, b[3], w, sh2), 0, GCornerNone);
+  } else {
+    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorOrange, GColorWhite));
+    graphics_draw_rect(ctx, GRect(1, b[3], w-1, sh2));
   }
-  if(curHealth >= 40){
-    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorChromeYellow,GColorWhite));
-    graphics_fill_rect(ctx, GRect(1, SY(106,h), w, SH(8,h)), 0, GCornerNone);
-  }else{
-    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorChromeYellow,GColorWhite));
-    graphics_draw_rect(ctx, GRect(1, SY(106,h), w-1, SH(8,h)));
+  if(cur >= 40){
+    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorChromeYellow, GColorWhite));
+    graphics_fill_rect(ctx, GRect(1, b[4], w, sh2), 0, GCornerNone);
+  } else {
+    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorChromeYellow, GColorWhite));
+    graphics_draw_rect(ctx, GRect(1, b[4], w-1, sh2));
   }
-  if(curHealth >= 30){
-    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorYellow,GColorWhite));
-    graphics_fill_rect(ctx, GRect(1, SY(121,h), w, SH(8,h)), 0, GCornerNone);
-  }else{
-    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorYellow,GColorWhite));
-    graphics_draw_rect(ctx, GRect(1, SY(121,h), w-1, SH(8,h)));
+  if(cur >= 30){
+    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorYellow, GColorWhite));
+    graphics_fill_rect(ctx, GRect(1, b[5], w, sh2), 0, GCornerNone);
+  } else {
+    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorYellow, GColorWhite));
+    graphics_draw_rect(ctx, GRect(1, b[5], w-1, sh2));
   }
-  if(curHealth >= 20){
-    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorIcterine,GColorWhite));
-    graphics_fill_rect(ctx, GRect(1, SY(136,h), w, SH(8,h)), 0, GCornerNone);
-  }else{
-    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorIcterine,GColorWhite));
-    graphics_draw_rect(ctx, GRect(1, SY(136,h), w-1, SH(8,h)));
+  if(cur >= 20){
+    graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorIcterine, GColorWhite));
+    graphics_fill_rect(ctx, GRect(1, b[6], w, sh2), 0, GCornerNone);
+  } else {
+    graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorIcterine, GColorWhite));
+    graphics_draw_rect(ctx, GRect(1, b[6], w-1, sh2));
   }
-  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorPastelYellow,GColorWhite));
-  graphics_fill_rect(ctx, GRect(1, SY(151,h), w, SH(8,h)), 0, GCornerNone);
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorPastelYellow, GColorWhite));
+  graphics_fill_rect(ctx, GRect(1, b[7], w, sh2), 0, GCornerNone);
 }
 
 static void battery_handler(BatteryChargeState new_state) {
-  static char LazerLevel[5];
   batteryLevel = (int)new_state.charge_percent;
-  if(authentic_buffer){
-    snprintf(LazerLevel, sizeof(LazerLevel), "%d0", batteryLevel);
-  }else{
-    snprintf(LazerLevel, sizeof(LazerLevel), "%d%%", batteryLevel);
-  }
-  int lastLevel = (int)persist_read_int(KEY_LAST_BATTERY_LEVEL);
-  if(batteryLevel != lastLevel){
-    int lastTime = persist_read_int(KEY_LAST_BATTERY_LEVEL_DATE);
-    int timeNow = (int)time(NULL);
-    int timeDif = timeNow - lastTime;
-    WatchInfoModel watch = watch_info_get_model();
-    int lifeSpan = 7 * 86400;
-    if(watch == WATCH_INFO_MODEL_PEBBLE_TIME_STEEL){
-       lifeSpan = 10 * 86400;
-    }
-    if(batteryLevel == 100 || !lastTime || batteryLevel > lastLevel){
-      persist_write_int(KEY_HEALTH, 100);
-    }else if(batteryLevel == 90){
-      persist_write_int(KEY_HEALTH, (int)((timeDif * 100) / (lifeSpan  / 20)));
-    }else{
-      persist_write_int(KEY_HEALTH, (int)((timeDif * 100) / (lifeSpan / 10)));
-    }
-    persist_write_int(KEY_LAST_BATTERY_LEVEL_DATE, timeNow);
-    persist_write_int(KEY_LAST_BATTERY_LEVEL, batteryLevel);
-  }
-
   layer_set_update_proc(health, drawHealth);
-  text_layer_set_text(battery, LazerLevel);
   GRect bgBounds = layer_get_bounds(background);
   batteryBar = layer_create(GRect(0, bgBounds.size.h - 9, bgBounds.size.w, 6));
   layer_set_update_proc(batteryBar, drawBatteryBar);
+}
+
+static void health_handler(HealthEventType event, void *context) {
+  if(event == HealthEventSignificantUpdate || event == HealthEventMovementUpdate) {
+    stepCount = (int)health_service_sum_today(HealthMetricStepCount);
+    static char steps_buf[8];
+    snprintf(steps_buf, sizeof(steps_buf), "%d", stepCount);
+    text_layer_set_text(battery, steps_buf);
+  }
 }
 
 static void update_time() {
@@ -246,44 +224,50 @@ static void drawArmour(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   int16_t w = bounds.size.w;
   int16_t h = bounds.size.h;
+  int16_t lh, sh2, b[8];
+  seg_layout(h, &lh, &sh2, b);
+
   graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorOxfordBlue, GColorWhite));
-  graphics_fill_rect(ctx, GRect(1, SY(7,h), w, SH(21,h)), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(1, b[0], w, lh), 0, GCornerNone);
   graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorDukeBlue, GColorWhite));
-  graphics_fill_rect(ctx, GRect(1, SY(35,h), w, SH(21,h)), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(1, b[1], w, lh), 0, GCornerNone);
   graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorBlue, GColorWhite));
-  graphics_fill_rect(ctx, GRect(1, SY(63,h), w, SH(21,h)), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(1, b[2], w, lh), 0, GCornerNone);
   graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorBlueMoon, GColorWhite));
-  graphics_fill_rect(ctx, GRect(1, SY(91,h), w, SH(8,h)), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(1, b[3], w, sh2), 0, GCornerNone);
   graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorVividCerulean, GColorWhite));
-  graphics_fill_rect(ctx, GRect(1, SY(106,h), w, SH(8,h)), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(1, b[4], w, sh2), 0, GCornerNone);
   graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorPictonBlue, GColorWhite));
-  graphics_fill_rect(ctx, GRect(1, SY(121,h), w, SH(8,h)), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(1, b[5], w, sh2), 0, GCornerNone);
   graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorElectricBlue, GColorWhite));
-  graphics_fill_rect(ctx, GRect(1, SY(136,h), w, SH(8,h)), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(1, b[6], w, sh2), 0, GCornerNone);
   graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorCeleste, GColorWhite));
-  graphics_fill_rect(ctx, GRect(1, SY(151,h), w, SH(8,h)), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(1, b[7], w, sh2), 0, GCornerNone);
 }
 
 static void drawArmourEmpty(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   int16_t w = bounds.size.w - 1;
   int16_t h = bounds.size.h;
+  int16_t lh, sh2, b[8];
+  seg_layout(h, &lh, &sh2, b);
+
   graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorOxfordBlue, GColorWhite));
-  graphics_draw_rect(ctx, GRect(1, SY(7,h), w, SH(21,h)));
+  graphics_draw_rect(ctx, GRect(1, b[0], w, lh));
   graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorDukeBlue, GColorWhite));
-  graphics_draw_rect(ctx, GRect(1, SY(35,h), w, SH(21,h)));
+  graphics_draw_rect(ctx, GRect(1, b[1], w, lh));
   graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorBlue, GColorWhite));
-  graphics_draw_rect(ctx, GRect(1, SY(63,h), w, SH(21,h)));
+  graphics_draw_rect(ctx, GRect(1, b[2], w, lh));
   graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorBlueMoon, GColorWhite));
-  graphics_draw_rect(ctx, GRect(1, SY(91,h), w, SH(8,h)));
+  graphics_draw_rect(ctx, GRect(1, b[3], w, sh2));
   graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorVividCerulean, GColorWhite));
-  graphics_draw_rect(ctx, GRect(1, SY(106,h), w, SH(8,h)));
+  graphics_draw_rect(ctx, GRect(1, b[4], w, sh2));
   graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorPictonBlue, GColorWhite));
-  graphics_draw_rect(ctx, GRect(1, SY(121,h), w, SH(8,h)));
+  graphics_draw_rect(ctx, GRect(1, b[5], w, sh2));
   graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorElectricBlue, GColorWhite));
-  graphics_draw_rect(ctx, GRect(1, SY(136,h), w, SH(8,h)));
+  graphics_draw_rect(ctx, GRect(1, b[6], w, sh2));
   graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorCeleste, GColorWhite));
-  graphics_draw_rect(ctx, GRect(1, SY(151,h), w, SH(8,h)));
+  graphics_draw_rect(ctx, GRect(1, b[7], w, sh2));
 }
 
 static void drawBackground(Layer *layer, GContext *ctx) {
@@ -307,18 +291,12 @@ static void windowLoad(Window *window) {
   int16_t sw = screen_bounds.size.w;
   int16_t sh = screen_bounds.size.h;
 
-  // Center panel sits between 16px side bars, with 6px gutters on each side
-  // Basalt reference: GRect(23, 4, 98, 160) for 144×168 screen
   background = layer_create(GRect(23, 4, sw - 46, sh - 8));
   layer_set_update_proc(background, drawBackground);
   GRect bgBounds = layer_get_bounds(background);
   int16_t bw = bgBounds.size.w;
   int16_t bh = bgBounds.size.h;
 
-  // Time font: LECO is a Pebble LED/7-segment system font — matches the
-  // GoldenEye 007 digital readout aesthetic on all color platforms.
-  // Aplite (B&W) falls back to the original BankGothic custom font.
-  // Secondary fonts (label/weather/date) scale up only on emery.
 #if defined(PBL_PLATFORM_EMERY)
   timeFont  = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_CLOCK_38));
   smallFont = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_SMALL_12));
@@ -333,14 +311,12 @@ static void windowLoad(Window *window) {
   medFont   = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_MED_12));
 #endif
 
-  // All text-layer y-positions are scaled proportionally from the 160px reference
-  // background height (basalt), so the layout adapts to the taller emery panel.
-  int16_t time_y   = bh * 55 / 160;
-  int16_t time_h   = bh * 50 / 160;
-  int16_t date_y   = bh * 82 / 160;
-  int16_t date_h   = bh * 22 / 160 + 10;
-  int16_t label_h  = 18;
-  int16_t lazer_y  = bh - 9 - label_h;  // flush against the top of batteryBar
+  int16_t time_y  = bh * 55 / 160;
+  int16_t time_h  = bh * 50 / 160;
+  int16_t date_y  = bh * 82 / 160;
+  int16_t date_h  = bh * 22 / 160 + 10;
+  int16_t label_h = 18;
+  int16_t lazer_y = bh - 9 - label_h;
 
   timeLayer = text_layer_create(GRect(0, time_y, bw, time_h));
   text_layer_set_font(timeLayer, timeFont);
@@ -370,6 +346,7 @@ static void windowLoad(Window *window) {
 
   watchLazer = text_layer_create(GRect(0, lazer_y, bw, label_h));
   text_layer_set_font(watchLazer, smallFont);
+  text_layer_set_text(watchLazer, "STEPS");
   text_layer_set_background_color(watchLazer, GColorClear);
   text_layer_set_text_color(watchLazer, textColor);
   text_layer_set_text_alignment(watchLazer, GTextAlignmentLeft);
@@ -380,9 +357,15 @@ static void windowLoad(Window *window) {
   text_layer_set_background_color(battery, GColorClear);
   text_layer_set_text_color(battery, textColor);
 
-  // Side bars span full screen height; right bar anchors to screen right edge
-  health = layer_create(GRect(1, 1, 16, sh - 2));
-  armour = layer_create(GRect(sw - 18, 1, 16, sh - 2));
+  // Initial step count
+  stepCount = (int)health_service_sum_today(HealthMetricStepCount);
+  static char steps_buf[8];
+  snprintf(steps_buf, sizeof(steps_buf), "%d", stepCount);
+  text_layer_set_text(battery, steps_buf);
+
+  // Side bars flush with the green background panel
+  health = layer_create(GRect(1,     4, 16, sh - 8));
+  armour = layer_create(GRect(sw-18, 4, 16, sh - 8));
   bt_handler(connection_service_peek_pebble_app_connection());
   battery_handler(battery_state_service_peek());
 
@@ -399,6 +382,7 @@ static void windowLoad(Window *window) {
 }
 
 static void windowUnload(Window *window) {
+  health_service_events_unsubscribe();
   battery_state_service_unsubscribe();
   connection_service_unsubscribe();
   text_layer_destroy(timeLayer);
@@ -437,6 +421,7 @@ static void init() {
   });
 
   battery_state_service_subscribe(battery_handler);
+  health_service_events_subscribe(health_handler, NULL);
 
   update_time();
 

@@ -6,7 +6,8 @@
     "pebble": {
         "capabilities": [
             "location",
-            "configurable"
+            "configurable",
+            "health"
         ],
         "displayName": "James Bond 007",
         "enableMultiJS": false,
