@@ -67,14 +67,15 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
 }
 
 
-static void drawBatteryBar(Layer *layer, GContext *ctx) {
+// 10 segments × 2,500 steps = 25,000 step goal
+static void drawStepsBar(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   int width = (bounds.size.w - 18) / 5;
 
   for (int16_t i = 0; i < 5; i++) {
-    graphics_context_set_fill_color(ctx, batteryLevel > i * 20 ? textColor : PBL_IF_COLOR_ELSE(GColorIslamicGreen, GColorBlack));
+    graphics_context_set_fill_color(ctx, stepCount > i * 5000 ? textColor : PBL_IF_COLOR_ELSE(GColorIslamicGreen, GColorBlack));
     graphics_fill_rect(ctx, GRect(3 + i * (width + 3), 0, width / 2, bounds.size.h), 0, GCornerNone);
-    graphics_context_set_fill_color(ctx, batteryLevel > ((i * 20) + 10) ? textColor : PBL_IF_COLOR_ELSE(GColorIslamicGreen, GColorBlack));
+    graphics_context_set_fill_color(ctx, stepCount > i * 5000 + 2500 ? textColor : PBL_IF_COLOR_ELSE(GColorIslamicGreen, GColorBlack));
     graphics_fill_rect(ctx, GRect(3 + i * (width + 3) + width / 2, 0, width / 2, bounds.size.h), 0, GCornerNone);
   }
 }
@@ -184,7 +185,7 @@ static void battery_handler(BatteryChargeState new_state) {
   layer_set_update_proc(health, drawHealth);
   GRect bgBounds = layer_get_bounds(background);
   batteryBar = layer_create(GRect(0, bgBounds.size.h - 9, bgBounds.size.w, 6));
-  layer_set_update_proc(batteryBar, drawBatteryBar);
+  layer_set_update_proc(batteryBar, drawStepsBar);
 }
 
 static void health_handler(HealthEventType event, void *context) {
@@ -193,6 +194,7 @@ static void health_handler(HealthEventType event, void *context) {
     static char steps_buf[8];
     snprintf(steps_buf, sizeof(steps_buf), "%d", stepCount);
     text_layer_set_text(battery, steps_buf);
+    if(batteryBar) layer_mark_dirty(batteryBar);
   }
 }
 
