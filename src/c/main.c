@@ -320,9 +320,9 @@ static void windowLoad(Window *window) {
   // Aplite (B&W) falls back to the original BankGothic custom font.
   // Secondary fonts (label/weather/date) scale up only on emery.
 #if defined(PBL_PLATFORM_EMERY)
-  timeFont  = fonts_get_system_font(FONT_KEY_LECO_32_BOLD_NUMBERS);
-  smallFont = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-  medFont   = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+  timeFont  = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_CLOCK_38));
+  smallFont = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_SMALL_12));
+  medFont   = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_MED_16));
 #elif defined(PBL_PLATFORM_BASALT)
   timeFont  = fonts_get_system_font(FONT_KEY_LECO_32_BOLD_NUMBERS);
   smallFont = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_SMALL_9));
@@ -339,8 +339,8 @@ static void windowLoad(Window *window) {
   int16_t time_h   = bh * 50 / 160;
   int16_t date_y   = bh * 82 / 160;
   int16_t date_h   = bh * 22 / 160 + 10;
-  int16_t lazer_y  = bh * 133 / 160;
   int16_t label_h  = 18;
+  int16_t lazer_y  = bh - 9 - label_h;  // flush against the top of batteryBar
 
   timeLayer = text_layer_create(GRect(0, time_y, bw, time_h));
   text_layer_set_font(timeLayer, timeFont);
@@ -410,11 +410,11 @@ static void windowUnload(Window *window) {
   layer_destroy(background);
   layer_destroy(armour);
   layer_destroy(health);
-#if defined(PBL_PLATFORM_APLITE)
-  fonts_unload_custom_font(timeFont);
+#if defined(PBL_PLATFORM_BASALT)
   fonts_unload_custom_font(smallFont);
   fonts_unload_custom_font(medFont);
-#elif defined(PBL_PLATFORM_BASALT)
+#else
+  fonts_unload_custom_font(timeFont);
   fonts_unload_custom_font(smallFont);
   fonts_unload_custom_font(medFont);
 #endif

@@ -50,6 +50,24 @@
                     "name": "MED_12",
                     "targetPlatforms": ["aplite", "basalt"],
                     "type": "font"
+                },
+                {
+                    "file": "fonts/CLOCK_29.ttf",
+                    "name": "CLOCK_38",
+                    "targetPlatforms": ["emery"],
+                    "type": "font"
+                },
+                {
+                    "file": "fonts/SMALL_10.ttf",
+                    "name": "SMALL_12",
+                    "targetPlatforms": ["emery"],
+                    "type": "font"
+                },
+                {
+                    "file": "fonts/MED_12.ttf",
+                    "name": "MED_16",
+                    "targetPlatforms": ["emery"],
+                    "type": "font"
                 }
             ]
         },
