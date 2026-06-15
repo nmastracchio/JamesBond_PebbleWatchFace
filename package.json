@@ -34,19 +34,19 @@
                     "type": "bitmap"
                 },
                 {
-                    "file": "fonts/CLOCK_29",
+                    "file": "fonts/CLOCK_29.ttf",
                     "name": "CLOCK_29",
                     "targetPlatforms": ["aplite", "basalt"],
                     "type": "font"
                 },
                 {
-                    "file": "fonts/SMALL_10",
+                    "file": "fonts/SMALL_10.ttf",
                     "name": "SMALL_9",
                     "targetPlatforms": ["aplite", "basalt"],
                     "type": "font"
                 },
                 {
-                    "file": "fonts/MED_12",
+                    "file": "fonts/MED_12.ttf",
                     "name": "MED_12",
                     "targetPlatforms": ["aplite", "basalt"],
                     "type": "font"
