@@ -15,7 +15,7 @@ static Window *window;
 static TextLayer *timeLayer, *watchLazer, *battery, *qWatch, *date, *weather;
 static GFont timeFont, smallFont, medFont;
 
-static Layer *health, *armour, *background, *batteryBar, *timeBg;
+static Layer *health, *armour, *background, *batteryBar;
 
 static int batteryLevel;
 
@@ -70,7 +70,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   }
 
     authentic_buffer = (int)authentic_tuple->value->int32;
-    text_layer_set_text(watchLazer, isAuthentic ? "WATCH  \nLASER  " : "\n BATTERY");
+    text_layer_set_text(watchLazer, isAuthentic ? "WATCH LASER" : "BATTERY");
     static char LazerLevel[5];
     if(isAuthentic){
        snprintf(LazerLevel, sizeof(LazerLevel), "%d0", batteryLevel);
@@ -88,16 +88,6 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
 
 }
 
-
-// GoldenEye-style HUD frame behind the time digits: black inset with a
-// single-pixel mint/white border, like the in-game watch/mission-timer readout.
-static void drawTimeBg(Layer *layer, GContext *ctx) {
-  GRect bounds = layer_get_bounds(layer);
-  graphics_context_set_fill_color(ctx, GColorBlack);
-  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
-  graphics_context_set_stroke_color(ctx, textColor);
-  graphics_draw_rect(ctx, GRect(0, 0, bounds.size.w, bounds.size.h));
-}
 
 static void drawBatteryBar(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
@@ -349,13 +339,8 @@ static void windowLoad(Window *window) {
   int16_t time_h   = bh * 50 / 160;
   int16_t date_y   = bh * 82 / 160;
   int16_t date_h   = bh * 22 / 160 + 10;
-  int16_t lazer_y  = bh * 130 / 160;
-  int16_t batt_y   = bh * 139 / 160;
-
-  // Black inset + border behind the digits: 4px taller and spans full panel
-  // width so the border runs edge-to-edge like a GoldenEye HUD strip.
-  timeBg = layer_create(GRect(0, time_y - 4, bw, time_h + 8));
-  layer_set_update_proc(timeBg, drawTimeBg);
+  int16_t lazer_y  = bh * 133 / 160;
+  int16_t label_h  = 18;
 
   timeLayer = text_layer_create(GRect(0, time_y, bw, time_h));
   text_layer_set_font(timeLayer, timeFont);
@@ -383,13 +368,13 @@ static void windowLoad(Window *window) {
   text_layer_set_text_color(weather, textColor);
   text_layer_set_text_alignment(weather, GTextAlignmentRight);
 
-  watchLazer = text_layer_create(GRect(0, lazer_y, 50, 50));
+  watchLazer = text_layer_create(GRect(0, lazer_y, bw / 2, label_h));
   text_layer_set_font(watchLazer, smallFont);
   text_layer_set_background_color(watchLazer, GColorClear);
   text_layer_set_text_color(watchLazer, textColor);
-  text_layer_set_text_alignment(watchLazer, GTextAlignmentCenter);
+  text_layer_set_text_alignment(watchLazer, GTextAlignmentLeft);
 
-  battery = text_layer_create(GRect(45, batt_y, 50, 20));
+  battery = text_layer_create(GRect(bw / 2, lazer_y, bw / 2, label_h));
   text_layer_set_font(battery, smallFont);
   text_layer_set_text_alignment(battery, GTextAlignmentRight);
   text_layer_set_background_color(battery, GColorClear);
@@ -410,7 +395,6 @@ static void windowLoad(Window *window) {
   layer_add_child(background, text_layer_get_layer(battery));
   layer_add_child(background, text_layer_get_layer(date));
   layer_add_child(background, batteryBar);
-  layer_add_child(background, timeBg);
   layer_add_child(background, text_layer_get_layer(timeLayer));
 }
 
@@ -423,7 +407,6 @@ static void windowUnload(Window *window) {
   text_layer_destroy(watchLazer);
   text_layer_destroy(battery);
   layer_destroy(batteryBar);
-  layer_destroy(timeBg);
   layer_destroy(background);
   layer_destroy(armour);
   layer_destroy(health);
