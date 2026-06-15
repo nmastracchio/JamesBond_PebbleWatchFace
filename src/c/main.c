@@ -83,19 +83,22 @@ static void drawStepsBar(Layer *layer, GContext *ctx) {
 // Compute segment layout from layer height h.
 // Top half (0..h/2): 3 large blocks with 2px gaps.
 // Bottom half (h/2..h): 5 small blocks with 2px gaps.
+// 8 segments (3 large + 5 small), uniform 4px gap between every pair.
+// large = 2×small; solving 3*large + 5*small + 7*gap = h gives small = (h - 28) / 11.
 static void seg_layout(int16_t h,
                        int16_t *large_h, int16_t *small_h,
                        int16_t b[8]) {
-  *large_h = (h / 2 - 4) / 3;
-  *small_h = (h / 2 - 8) / 5;
+  const int16_t g = 4;
+  *small_h = (h - 7 * g) / 11;
+  *large_h = 2 * (*small_h);
   b[0] = 0;
-  b[1] = *large_h + 2;
-  b[2] = 2 * (*large_h + 2);
-  b[3] = h / 2;
-  b[4] = h / 2 + (*small_h + 2);
-  b[5] = h / 2 + 2 * (*small_h + 2);
-  b[6] = h / 2 + 3 * (*small_h + 2);
-  b[7] = h / 2 + 4 * (*small_h + 2);
+  b[1] = *large_h + g;
+  b[2] = 2 * (*large_h + g);
+  b[3] = 3 * (*large_h + g);
+  b[4] = b[3] + *small_h + g;
+  b[5] = b[3] + 2 * (*small_h + g);
+  b[6] = b[3] + 3 * (*small_h + g);
+  b[7] = b[3] + 4 * (*small_h + g);
 }
 
 static void drawHealth(Layer *layer, GContext *ctx) {
@@ -348,7 +351,7 @@ static void windowLoad(Window *window) {
 
   watchLazer = text_layer_create(GRect(0, lazer_y, bw, label_h));
   text_layer_set_font(watchLazer, smallFont);
-  text_layer_set_text(watchLazer, "STEPS");
+  text_layer_set_text(watchLazer, "WATCH LASER");
   text_layer_set_background_color(watchLazer, GColorClear);
   text_layer_set_text_color(watchLazer, textColor);
   text_layer_set_text_alignment(watchLazer, GTextAlignmentLeft);
