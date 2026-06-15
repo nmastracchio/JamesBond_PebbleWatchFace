@@ -330,7 +330,7 @@ static void windowLoad(Window *window) {
   // Aplite (B&W) falls back to the original BankGothic custom font.
   // Secondary fonts (label/weather/date) scale up only on emery.
 #if defined(PBL_PLATFORM_EMERY)
-  timeFont  = fonts_get_system_font(FONT_KEY_LECO_42_BOLD_NUMBERS);
+  timeFont  = fonts_get_system_font(FONT_KEY_LECO_32_BOLD_NUMBERS);
   smallFont = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   medFont   = fonts_get_system_font(FONT_KEY_GOTHIC_18);
 #elif defined(PBL_PLATFORM_BASALT)
