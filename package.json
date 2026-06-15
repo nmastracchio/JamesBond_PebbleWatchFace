@@ -28,7 +28,8 @@
                     "name": "image",
                     "targetPlatforms": [
                         "aplite",
-                        "basalt"
+                        "basalt",
+                        "emery"
                     ],
                     "type": "bitmap"
                 },
@@ -52,7 +53,8 @@
         "sdkVersion": "3",
         "targetPlatforms": [
             "aplite",
-            "basalt"
+            "basalt",
+            "emery"
         ],
         "uuid": "43bfa806-3d97-4a18-b221-bbe4cf363fcf",
         "watchapp": {
