@@ -14,9 +14,8 @@ static Window *window;
 
 static TextLayer *timeLayer, *watchLazer, *battery, *qWatch, *date, *weather;
 static GFont timeFont, smallFont, medFont;
-static bool use_custom_fonts;
 
-static Layer *health, *armour, *background, *batteryBar;
+static Layer *health, *armour, *background, *batteryBar, *timeBg;
 
 static int batteryLevel;
 
@@ -89,6 +88,16 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
 
 }
 
+
+// GoldenEye-style HUD frame behind the time digits: black inset with a
+// single-pixel mint/white border, like the in-game watch/mission-timer readout.
+static void drawTimeBg(Layer *layer, GContext *ctx) {
+  GRect bounds = layer_get_bounds(layer);
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  graphics_context_set_stroke_color(ctx, textColor);
+  graphics_draw_rect(ctx, GRect(0, 0, bounds.size.w, bounds.size.h));
+}
 
 static void drawBatteryBar(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
@@ -316,18 +325,22 @@ static void windowLoad(Window *window) {
   int16_t bw = bgBounds.size.w;
   int16_t bh = bgBounds.size.h;
 
-  // On emery (200×228) the custom fonts sized for 144×168 are too small;
-  // use system fonts that are ~1.4× larger instead.
-#ifdef PBL_PLATFORM_EMERY
-  timeFont  = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
+  // Time font: LECO is a Pebble LED/7-segment system font — matches the
+  // GoldenEye 007 digital readout aesthetic on all color platforms.
+  // Aplite (B&W) falls back to the original BankGothic custom font.
+  // Secondary fonts (label/weather/date) scale up only on emery.
+#if defined(PBL_PLATFORM_EMERY)
+  timeFont  = fonts_get_system_font(FONT_KEY_LECO_42_BOLD_NUMBERS);
   smallFont = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   medFont   = fonts_get_system_font(FONT_KEY_GOTHIC_18);
-  use_custom_fonts = false;
-#else
+#elif defined(PBL_PLATFORM_BASALT)
+  timeFont  = fonts_get_system_font(FONT_KEY_LECO_32_BOLD_NUMBERS);
+  smallFont = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_SMALL_9));
+  medFont   = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_MED_12));
+#else  // aplite
   timeFont  = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_CLOCK_29));
   smallFont = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_SMALL_9));
   medFont   = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_MED_12));
-  use_custom_fonts = true;
 #endif
 
   // All text-layer y-positions are scaled proportionally from the 160px reference
@@ -338,6 +351,11 @@ static void windowLoad(Window *window) {
   int16_t date_h   = bh * 22 / 160 + 10;
   int16_t lazer_y  = bh * 130 / 160;
   int16_t batt_y   = bh * 139 / 160;
+
+  // Black inset + border behind the digits: 4px taller and spans full panel
+  // width so the border runs edge-to-edge like a GoldenEye HUD strip.
+  timeBg = layer_create(GRect(0, time_y - 4, bw, time_h + 8));
+  layer_set_update_proc(timeBg, drawTimeBg);
 
   timeLayer = text_layer_create(GRect(0, time_y, bw, time_h));
   text_layer_set_font(timeLayer, timeFont);
@@ -392,6 +410,7 @@ static void windowLoad(Window *window) {
   layer_add_child(background, text_layer_get_layer(battery));
   layer_add_child(background, text_layer_get_layer(date));
   layer_add_child(background, batteryBar);
+  layer_add_child(background, timeBg);
   layer_add_child(background, text_layer_get_layer(timeLayer));
 }
 
@@ -404,14 +423,18 @@ static void windowUnload(Window *window) {
   text_layer_destroy(watchLazer);
   text_layer_destroy(battery);
   layer_destroy(batteryBar);
+  layer_destroy(timeBg);
   layer_destroy(background);
   layer_destroy(armour);
   layer_destroy(health);
-  if (use_custom_fonts) {
-    fonts_unload_custom_font(timeFont);
-    fonts_unload_custom_font(smallFont);
-    fonts_unload_custom_font(medFont);
-  }
+#if defined(PBL_PLATFORM_APLITE)
+  fonts_unload_custom_font(timeFont);
+  fonts_unload_custom_font(smallFont);
+  fonts_unload_custom_font(medFont);
+#elif defined(PBL_PLATFORM_BASALT)
+  fonts_unload_custom_font(smallFont);
+  fonts_unload_custom_font(medFont);
+#endif
 }
 
 static void init() {
