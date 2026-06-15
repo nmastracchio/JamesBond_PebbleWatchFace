@@ -31,7 +31,7 @@ static int authentic_buffer;
 static char conditions_buffer[32];
 static char weather_layer_buffer[32];
 
-static char version[25] = "Q WATCH V4.1\n";
+static char version[25] = "Q WATCH V4.2\n";
 
 static void inbox_dropped_callback(AppMessageResult reason, void *context) {
   APP_LOG(APP_LOG_LEVEL_ERROR, "Message dropped!");
