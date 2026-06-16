@@ -1,7 +1,19 @@
-var myAPIKey = "5ca68835bc17d7b218a09bbce94bcc4e";
+function wmoCondition(code) {
+  if (code === 0 || code === 1) return 'CLEAR';
+  if (code === 2)               return 'PARTLY CLOUDY';
+  if (code === 3)               return 'OVERCAST';
+  if (code === 45 || code === 48) return 'FOG';
+  if (code >= 51 && code <= 57) return 'DRIZZLE';
+  if (code >= 61 && code <= 67) return 'RAIN';
+  if (code >= 71 && code <= 77) return 'SNOW';
+  if (code >= 80 && code <= 82) return 'SHOWERS';
+  if (code === 85 || code === 86) return 'SNOW SHOWERS';
+  if (code >= 95)               return 'THUNDERSTORM';
+  return 'UNKNOWN';
+}
 
 function locationError(err) {
-  console.log('Error requesting location!');
+  console.log('Location error: ' + err.message);
 }
 
 function getWeather() {
@@ -12,59 +24,44 @@ function getWeather() {
   );
 }
 
-// Listen for when the watchface is opened
-Pebble.addEventListener('ready', 
-  function(e) {
-    console.log('PebbleKit JS ready!');
-
-    // Get the initial weather
-    getWeather();
-  }
-);
-
-// Listen for when an AppMessage is received
-Pebble.addEventListener('appmessage', function(e) {
-    console.log('AppMessage received!');
-    getWeather();
+Pebble.addEventListener('ready', function(e) {
+  console.log('PebbleKit JS ready!');
+  getWeather();
 });
 
-var xhrRequest = function (url, type, callback) {
-  var xhr = new XMLHttpRequest();
-  xhr.onload = function () {
-    callback(this.responseText);
-  };
-  xhr.open(type, url);
-  xhr.send();
-};
+Pebble.addEventListener('appmessage', function(e) {
+  console.log('AppMessage received — refreshing weather');
+  getWeather();
+});
+
 function locationSuccess(pos) {
-  // Construct URL
-  var url = 'https://api.openweathermap.org/data/2.5/weather?lat=' +
-      pos.coords.latitude + '&lon=' + pos.coords.longitude + '&appid=' + "5ca68835bc17d7b218a09bbce94bcc4e";
+  var url = 'https://api.open-meteo.com/v1/forecast' +
+    '?latitude='        + pos.coords.latitude +
+    '&longitude='       + pos.coords.longitude +
+    '&current_weather=true' +
+    '&temperature_unit=celsius';
 
-  // Send request to OpenWeatherMap
-  xhrRequest(url, 'GET', function(responseText) {
-      // responseText contains a JSON object with weather info
-      var json = JSON.parse(responseText);
+  var xhr = new XMLHttpRequest();
+  xhr.onload = function() {
+    try {
+      var json = JSON.parse(this.responseText);
+      var cw = json.current_weather;
+      var temperature = Math.round(cw.temperature);
+      var conditions  = wmoCondition(cw.weathercode);
+      console.log('Weather: ' + conditions + ' ' + temperature + 'C');
 
-      // Temperature in Kelvin requires adjustment
-      var temperature = Math.round(json.main.temp - 273.15);
-      console.log('Temperature is ' + temperature);
-
-      // Conditions
-      var conditions = json.weather[0].main;      
-      console.log('Conditions are ' + conditions);
-      
-      // Assemble dictionary using our keys
-      var dictionary = {
-        'KEY_TEMPERATURE': temperature,
-        'KEY_CONDITIONS': conditions.toUpperCase()
-      };
-
-      // Send to Pebble
-      Pebble.sendAppMessage(dictionary, function(e) {
-          console.log('Weather info sent to Pebble successfully!');
-        }, function(e) {
-          console.log('Error sending weather info to Pebble!');
-        });
-    });
+      Pebble.sendAppMessage(
+        { 'KEY_TEMPERATURE': temperature, 'KEY_CONDITIONS': conditions },
+        function() { console.log('Weather sent to Pebble'); },
+        function(e) { console.log('Send failed: ' + JSON.stringify(e)); }
+      );
+    } catch(err) {
+      console.log('Parse error: ' + err);
+    }
+  };
+  xhr.onerror = function() {
+    console.log('XHR error fetching weather');
+  };
+  xhr.open('GET', url);
+  xhr.send();
 }
