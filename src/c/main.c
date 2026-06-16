@@ -23,8 +23,8 @@ static int stepCount;
   Tuple *authentic_tuple;
 
 static char cels_buffer[8];
-static char conditions_buffer[32];
-static char weather_layer_buffer[32];
+static char conditions_buffer[48];
+static char weather_layer_buffer[56];
 
 static char version[25] = "Q WATCH V4.2\n";
 
@@ -51,13 +51,12 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   } else {
     temp_tuple = dict_find(iterator, KEY_TEMPERATURE);
     conditions_tuple = dict_find(iterator, KEY_WEATHER);
-    snprintf(conditions_buffer, sizeof(conditions_buffer), "%s", conditions_tuple->value->cstring);
+    if(conditions_tuple) {
+      snprintf(conditions_buffer, sizeof(conditions_buffer), "%s", conditions_tuple->value->cstring);
+    }
   }
 
   int isCels = (int)persist_read_int(KEY_ISCELS);
-  if(isCels) {
-    snprintf(cels_buffer, sizeof(cels_buffer), "%d", isCels);
-  }
 
   if(temp_tuple && conditions_tuple){
     int temp = isCels ? (int)temp_tuple->value->int32 : (int)temp_tuple->value->int32 * 1.8 + 32;
